@@ -46,11 +46,66 @@ function render(){
     }
 }
 function phyTick(){
-    let p = document.getElementById("rig").getAttribute("position").split(" ");
-    p.splice(1,0);
-    console.log(p);
+    let or = document.getElementById("camera").object3D.rotation;
+    let p = document.getElementById("camera").object3D.position;
+    p = [p.x, p.y, p.z];
+    let x = controller.thumbstick.x;
+    let y = controller.thumbstick.y;
+    
+    let dx = Math.cos(or.y) * x + Math.sin(or.y) * y;
+    let dy = Math.sin(or.x) * y;
+    let dz = Math.cos(or.y) * y - Math.sin(or.y) * x;
+    if(game.map[Math.floor(p[0]+dx)][Math.floor(p[2]+dz)] !== "C" || true){
+        p[0] += dx;
+        p[2] += dz;
+    }
+
+
+    document.getElementById("camera").object3D.position.set(p[0], p[1], p[2]);
+
 }
-setTimeout(phyTick, 2000);
+setInterval(phyTick, 1000/10);
+function packet(){
+    sn({
+        "ty": "pos",
+        "d": {
+            "p": document.getElementById("camera").object3D.position,
+            "r": document.getElementById("camera").object3D.rotation
+        },
+        "tk": tk
+    });  
+}
+function fabMap(t,p){
+    if(document.getElementById("map-"+p[0]+"-"+p[1])){
+        document.getElementById("map-"+p[0]+"-"+p[1]).parentElement.removeChild(document.getElementById("map-"+p[0]+"-"+p[1]));
+    }
+    if(t == "B"){
+        let o = document.createElement("a-sphere");
+        o.setAttribute("id", "map-"+p[0]+"-"+p[1]);
+        o.setAttribute("position", p[0]+" 1 "+p[1]);
+        o.setAttribute("radius", "1");
+        o.setAttribute("color", "#0000FF");
+        document.getElementsByTagName("a-scene")[0].appendChild(o);
+        return o;
+    } else if(t == "E"){
+        return;
+    } else if(t == "C"){
+        let o = document.createElement("a-box");
+        o.setAttribute("id", "map-"+p[0]+"-"+p[1]);
+        o.setAttribute("position", p[0]+" 1 "+p[1]);
+        o.setAttribute("height", "2");
+        o.setAttribute("color", "#00FF00");
+        document.getElementsByTagName("a-scene")[0].appendChild(o);
+        return o;
+    } else if(t == "W"){
+        let o = document.createElement("a-box");
+        o.setAttribute("id", "map-"+p[0]+"-"+p[1]);
+        o.setAttribute("position", p[0]+" 1 "+p[1]);
+        o.setAttribute("height", "2");
+        o.setAttribute("color", "#FF0000");
+        document.getElementsByTagName("a-scene")[0].appendChild(o);
+    }
+}
 /*
 <a-box position="-1 0.5 -3" rotation="0 45 0" color="#4CC3D9"></a-box>
 <a-sphere position="0 1.25 -5" radius="1.25" color="#EF2D5E"></a-sphere>
@@ -81,5 +136,17 @@ ws.onmessage = function(m){
     } else if(m.ty == "pos"){
         game.players[m.id].p = m.d.p;
         game.players[m.id].r = m.d.r;
+    } else if(m.ty == "mapupdate"){
+        let d = m.d;
+        for(let i in d){
+            let o = d[i];
+            let tar = document.getElementById("map-"+o.p[0]+"-"+o.p[1]);
+            if(o.t == "E"){
+                if(tar){
+                    tar.parentElement.removeChild(tar);
+                }
+            }
+            fabMap(o.t, o.p);
+        }
     }
 }
