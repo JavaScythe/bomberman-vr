@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <title>sigma</title>
+    </head>
+    <body>
+        <p id="gang"></p>
+        <script>
+            let ws = new WebSocket("ws://"+location.hostname+":3000");
+            ws.onopen = function(){
+                console.log("ws opened");
+            }
+            ws.onmessage = function(m){
+                console.log(m.data);
+                document.getElementById("gang").innerHTML = document.getElementById("gang").innerHTML+"\n"+m.data;
+            }
+
+        </script>
+    </body>
+</html>
