@@ -84,11 +84,11 @@ app.ws('/*', {
             });
         } else if(m.ty == "pos"){
             if(!checkId(m.tk)) return;
-            app.publish("game", {
+            app.publish("game", JSON.stringify({
                 "ty": "pos",
                 "d": m.d,
                 id: numById(m.tk)
-            });
+            }));
         } else if(m.ty == "bomb"){
             if(!checkId(m.tk)) return;
             let pn = numById(m.tk);
@@ -173,22 +173,27 @@ function wd(ws,m){
 function gameInit(){
     game.playing = true;
     if(game.players[0]){
-        game.players[0].p = [0,0];
+        game.players[0].p = [0,1.5,0];
     } else if(game.players[1]){
-        game.players[1].p = [9,0];
+        game.players[1].p = [9,1.5,0];
     } else if(game.players[2]){
-        game.players[2].p = [9,9];
+        game.players[2].p = [9,1.5,9];
     } else if(game.players[3]){
-        game.players[3].p = [0,9];
+        game.players[3].p = [0,1.5,9];
     }
     for(let i in game.players){
         game.players[i].bombs = 1;
     }
     game.bombs = {};
     game.map = MAP;
+    //copy game.players without tk property
+    let ng = JSON.parse(JSON.stringify(game));
+    for(let i in ng.players){
+        delete ng.players[i].id;
+    }
     app.publish("game", JSON.stringify({
         "ty": "init",
-        "d": game
+        "d": ng
     }));
 
 }

@@ -65,16 +65,24 @@ function phyTick(){
 
 }
 setInterval(phyTick, 1000/10);
+function rotProc(r){
+    return [
+        r._x,
+        r._y,
+        r._z
+    ]
+}
 function packet(){
     sn({
         "ty": "pos",
         "d": {
-            "p": document.getElementById("camera").object3D.position,
-            "r": document.getElementById("camera").object3D.rotation
+            "p": Object.values(document.getElementById("camera").object3D.position),
+            "r": rotProc(document.getElementById("camera").object3D.rotation)
         },
         "tk": tk
     });  
 }
+setInterval(packet, 1000);
 function fabMap(t,p){
     if(document.getElementById("map-"+p[0]+"-"+p[1])){
         document.getElementById("map-"+p[0]+"-"+p[1]).parentElement.removeChild(document.getElementById("map-"+p[0]+"-"+p[1]));
@@ -104,6 +112,13 @@ function fabMap(t,p){
         o.setAttribute("height", "2");
         o.setAttribute("color", "#FF0000");
         document.getElementsByTagName("a-scene")[0].appendChild(o);
+    } else if(t == "P"){
+        let o = document.createElement("a-box");
+        o.setAttribute("scale", "0.5 0.5 0.5");
+        o.setAttribute("position", p.join(" "));
+        o.setAttribute("color", "#000000");
+        document.getElementsByTagName("a-scene")[0].appendChild(o);
+        return o;
     }
 }
 /*
@@ -131,11 +146,26 @@ ws.onmessage = function(m){
         tk = m.tk;
         alert("joined as player "+m.player);
     } else if(m.ty == "init"){
-        game.map = m.map;
-        game.players = m.players;
+        game.map = m.d.map;
+        game.players = m.d.players;
+        for(let i in game.players){
+            if(!document.getElementById("player-"+i)){
+                let o = fabMap("P", game.players[i].p);
+                o.setAttribute("id", "player-"+i);
+            } else {
+                document.getElementById("player-"+i).object3D.position.set(...game.players[i].p);
+            }
+        }
     } else if(m.ty == "pos"){
         game.players[m.id].p = m.d.p;
         game.players[m.id].r = m.d.r;
+        console.log(m.d.r);
+        if(!document.getElementById("player-"+m.id)){
+            let o = fabMap("P", game.players[m.id].p);
+            o.setAttribute("id", "player-"+m.id);
+        }
+        document.getElementById("player-"+m.id).object3D.position.set(...game.players[m.id].p);
+        document.getElementById("player-"+m.id).object3D.rotation.set(...game.players[m.id].r,0);
     } else if(m.ty == "mapupdate"){
         let d = m.d;
         for(let i in d){
