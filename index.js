@@ -2,23 +2,27 @@ const uWS = require('uWebSockets.js');
 const app = uWS.App();
 const fs = require('fs');
 const MAP = [
-    ["E","E","C","W","C","W","C","E","E"],
-    ["E","C","C","C","C","C","C","C","E"],
-    ["C","W","C","W","C","W","C","W","C"],
-    ["C","C","C","C","C","C","C","C","C"],
-    ["C","W","C","W","C","W","C","W","C"],
-    ["C","C","C","C","C","C","C","C","C"],
-    ["C","W","C","W","C","W","C","W","C"],
-    ["C","C","C","C","C","C","C","C","C"],
-    ["E","W","C","W","C","W","C","W","C"],
-    ["E","E","C","C","C","C","C","C","C"],
-];
+    ["E","E","C","C","C","C","C","C","C","C","C","E","E"],
+    ["E","W","C","W","C","W","C","W","C","W","C","W","E"],
+    ["C","C","C","C","C","C","C","C","C","C","C","C","C"],
+    ["C","W","C","W","C","W","C","W","C","W","C","W","C"],
+    ["C","C","C","C","C","C","C","C","C","C","C","C","C"],
+    ["C","W","C","W","C","W","C","W","C","W","C","W","C"],
+    ["C","C","C","C","C","C","C","C","C","C","C","C","C"],
+    ["C","W","C","W","C","W","C","W","C","W","C","W","C"],
+    ["C","C","C","C","C","C","C","C","C","C","C","C","C"],
+    ["C","W","C","W","C","W","C","W","C","W","C","W","C"],
+    ["C","C","C","C","C","C","C","C","C","C","C","C","C"],
+    ["E","W","C","W","C","W","C","W","C","W","C","W","E"],
+    ["E","E","C","C","C","C","C","C","C","C","C","E","E"]
+]
 
 let game = {
     playing: false,
     players: [],
     map: 0,
-    bombs: {}
+    bombs: {},
+    bombowners: {}
 }
 let enc = new TextDecoder("utf-8");
 app.get('/', (res, req) => {
@@ -74,7 +78,8 @@ app.ws('/*', {
             let tk = Math.random().toString().replace(".","");
             game.players.push({
                 id: tk,
-                p: []
+                p: [],
+                ws: ws
             });
             ws.getUserData().tk = tk;
             wd(ws, {
@@ -89,6 +94,7 @@ app.ws('/*', {
                 "d": m.d,
                 id: numById(m.tk)
             }));
+            game.players[numById(m.tk)].p = m.d.p;
         } else if(m.ty == "bomb"){
             if(!checkId(m.tk)) return;
             let pn = numById(m.tk);
@@ -107,7 +113,8 @@ app.ws('/*', {
                     }));
                     game.players[pn].bombs--;
                     let bid = Math.random().toString().replace(".","");
-                    bombs[bid] = m.p;
+                    game.bombs[bid] = m.p;
+                    game.bombowners[bid] = pn;
                     setTimeout(detonate.bind(null,bid), 3000)
                 }
             }
@@ -134,16 +141,58 @@ function detonate(bid){
         return;
     }
     let p = game.bombs[bid];
+    game.players[game.bombowners[bid]].bombs++;
     if(ignite([p[0]-1, p[1]])) ignite([p[0]-2, p[1]]);
     if(ignite([p[0], p[1]-1])) ignite([p[0], p[1]-2]);
     if(ignite([p[0], p[1]+1])) ignite([p[0], p[1]+2]);
     if(ignite([p[0]+1, p[1]])) ignite([p[0]+2, p[1]]);
 
     delete game.bombs[bid];
+    game.map[p[0]][p[1]] = "E";
+    app.publish("game", JSON.stringify({
+        "ty": "mapupdate",
+        "d": [
+            {
+                "p": p,
+                "t": "E"
+            }
+        ]
+    }));
 }
 function ignite(p){
+    console.log("igniting", p);
+    if(p[0] < 0 || p[1] < 0 || p[0] > 12 || p[1] > 12){
+        return false;
+    }
+    //check if there are any players in this block
+    for(let i in game.players){
+        if(Math.round(game.players[i].p[0]) == p[0] && Math.round(game.players[i].p[2]) == p[1]){
+            game.players[i].ws.unsubscribe("game");
+            app.publish("game", JSON.stringify({
+                "ty": "death",
+                "id": i
+            }));
+            wd(game.players[i].ws, {
+                "ty": "death",
+                "id": i
+            });
+            game.players.splice(i,1);
+        }
+    }
     if(game.map[p[0]][p[1]] == "C"){
-        game.map[p[0]][p[1]] == "E";
+        game.map[p[0]][p[1]] = "E";
+        app.publish("game", JSON.stringify({
+            "ty": "mapupdate",
+            "d": [
+                {
+                    "p": p,
+                    "t": "E"
+                }
+            ]
+        }));
+        return false;
+    }
+    if(game.map[p[0]][p[1]] == "W"){
         return false;
     }
     if(game.map[p[0]][p[1]] == "B"){

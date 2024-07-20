@@ -1,5 +1,7 @@
 let ws = new WebSocket("ws://"+location.hostname+":3000");
 let tk;
+let pid;
+let prvpos = [0,0];
 let game = {
     map: [
         ["E","E","C","C","C","C","C","C","C","C","C","E","E"],
@@ -45,32 +47,58 @@ function render(){
         }
     }
 }
+function collisioncheck(p){
+    //boundaries
+    if(p[0] < 0 || p[0] > 12 || p[1] < 0 || p[1] > 12){
+        return "W";
+    }
+    //walls
+    //round to nearest integer
+    let o = game.map[Math.round(p[0])][Math.round(p[1])];
+    return o;
+}
 function phyTick(){
     let or = document.getElementById("camera").object3D.rotation;
     let p = document.getElementById("camera").object3D.position;
     p = [p.x, p.y, p.z];
     let x = controller.thumbstick.x;
     let y = controller.thumbstick.y;
-    
+    let speed = 0.1;
+    x *= speed;
+    y *= speed;
     let dx = Math.cos(or.y) * x + Math.sin(or.y) * y;
     let dy = Math.sin(or.x) * y;
     let dz = Math.cos(or.y) * y - Math.sin(or.y) * x;
-    if(game.map[Math.floor(p[0]+dx)][Math.floor(p[2]+dz)] !== "C" || true){
+    let o = collisioncheck([p[0]+dx, p[2]+dz]);
+    if(
+        o == "W" ||
+        o == "C" ||
+        (o == "B" && (collisioncheck([p[0],p[1]]) != "B" || collisioncheck(prvpos) !== "B"))
+    ){
+        
+    } else {
         p[0] += dx;
         p[2] += dz;
     }
-
-
+    prvpos = [p[0],p[1]];
     document.getElementById("camera").object3D.position.set(p[0], p[1], p[2]);
 
 }
-setInterval(phyTick, 1000/10);
+setInterval(phyTick, 1000/50);
 function rotProc(r){
     return [
         r._x,
         r._y,
         r._z
     ]
+}
+function dropBomb(){
+    console.log("BOMBS AWAY", [Math.round(document.getElementById("camera").object3D.position.x), Math.round(document.getElementById("camera").object3D.position.z)]);
+    sn({
+        "ty": "bomb",
+        "p": [Math.round(document.getElementById("camera").object3D.position.x), Math.round(document.getElementById("camera").object3D.position.z)],
+        "tk": tk
+    });
 }
 function packet(){
     sn({
@@ -82,7 +110,7 @@ function packet(){
         "tk": tk
     });  
 }
-setInterval(packet, 1000);
+setInterval(packet, 200);
 function fabMap(t,p){
     if(document.getElementById("map-"+p[0]+"-"+p[1])){
         document.getElementById("map-"+p[0]+"-"+p[1]).parentElement.removeChild(document.getElementById("map-"+p[0]+"-"+p[1]));
@@ -91,7 +119,7 @@ function fabMap(t,p){
         let o = document.createElement("a-sphere");
         o.setAttribute("id", "map-"+p[0]+"-"+p[1]);
         o.setAttribute("position", p[0]+" 1 "+p[1]);
-        o.setAttribute("radius", "1");
+        o.setAttribute("radius", "0.5");
         o.setAttribute("color", "#0000FF");
         document.getElementsByTagName("a-scene")[0].appendChild(o);
         return o;
@@ -145,10 +173,15 @@ ws.onmessage = function(m){
     } else if(m.ty == "success"){
         tk = m.tk;
         alert("joined as player "+m.player);
+        pid = m.player;
     } else if(m.ty == "init"){
         game.map = m.d.map;
         game.players = m.d.players;
         for(let i in game.players){
+            if(i == pid){
+                document.getElementById("camera").object3D.position.set(...game.players[i].p);
+                continue;
+            }
             if(!document.getElementById("player-"+i)){
                 let o = fabMap("P", game.players[i].p);
                 o.setAttribute("id", "player-"+i);
@@ -156,7 +189,14 @@ ws.onmessage = function(m){
                 document.getElementById("player-"+i).object3D.position.set(...game.players[i].p);
             }
         }
+        console.log("initrendermap");
+        for(let i in game.map){
+            for(let j in game.map[i]){
+                fabMap(game.map[i][j], [i,j]);
+            }
+        }
     } else if(m.ty == "pos"){
+        if(pid == m.id) return;
         game.players[m.id].p = m.d.p;
         game.players[m.id].r = m.d.r;
         console.log(m.d.r);
@@ -165,7 +205,7 @@ ws.onmessage = function(m){
             o.setAttribute("id", "player-"+m.id);
         }
         document.getElementById("player-"+m.id).object3D.position.set(...game.players[m.id].p);
-        document.getElementById("player-"+m.id).object3D.rotation.set(...game.players[m.id].r,0);
+        document.getElementById("player-"+m.id).object3D.rotation.set(...game.players[m.id].r);
     } else if(m.ty == "mapupdate"){
         let d = m.d;
         for(let i in d){
@@ -177,6 +217,10 @@ ws.onmessage = function(m){
                 }
             }
             fabMap(o.t, o.p);
+            game.map[o.p[0]][o.p[1]] = o.t;
         }
+    } else if(m.ty == "death"){
+        alert("Player "+m.id+" died");
+        document.getElementById("player-"+m.id).parentElement.removeChild(document.getElementById("player-"+m.id));
     }
 }
